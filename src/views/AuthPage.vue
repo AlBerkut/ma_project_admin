@@ -1,7 +1,7 @@
 <template>
     <base-page-layout>
         <template slot="pageTitle">
-            {{ isLoginAction ? translateText('login') : translateText('registration') }}
+            {{ translateText('login') }}
         </template>
 
         <div class="auth-form" :key="$route.name">
@@ -37,7 +37,7 @@
 
                 <div class="form-auth-buttons">
                     <button class="btn btn-primary btn-block" type="submit">
-                        {{ isLoginAction ? translateText('logIn') : translateText('register') }}
+                        {{ translateText('logIn') }}
                     </button>
 
                     <button class="btn btn-primary js-login-with-google" type="button">
@@ -47,16 +47,6 @@
                     <button class="btn btn-primary" type="button" @click="loginWithFB">
                         <font-awesome-icon :icon="['fab', 'facebook-f']" />
                     </button>
-                </div>
-
-                <div class="text-center auth-form__register-link">
-                    <router-link :to="{ name: 'register' }" v-if="isLoginAction">
-                        {{ translateText('register') }}
-                    </router-link>
-
-                    <router-link :to="{ name: 'login' }" v-else>
-                        {{ translateText('logIn') }}
-                    </router-link>
                 </div>
             </form>
         </div>
@@ -73,8 +63,10 @@ import BasePageLayout from '@/views/BasePageLayout.vue';
 
 import eventBus from '@/eventBus';
 import { namespace } from 'vuex-class';
+import { UserPublicData } from '@/index.d';
 
 const authModule = namespace('auth');
+const userModule = namespace('user');
 
 @Component({
     name: 'AuthPage',
@@ -83,15 +75,11 @@ const authModule = namespace('auth');
     },
 })
 export default class AuthPage extends Vue {
-    isLoginAction = true;
-
     userEmail = '';
 
     userPassword = '';
 
     @authModule.Action('login') login!: Function;
-
-    @authModule.Action('register') register!: Function;
 
     @authModule.Action('loginWithGoogle') loginWithGoogle!: Function;
 
@@ -99,8 +87,11 @@ export default class AuthPage extends Vue {
 
     @authModule.Mutation('SET_TOKEN') setToken!: Function;
 
+    @userModule.Action('loadUser') loadUser!: Function;
+
+    @userModule.State('user') user!: UserPublicData;
+
     mounted() {
-        this.isLoginAction = this.$route.name === 'login';
         this.initGoogleAuth();
     }
 
@@ -111,27 +102,20 @@ export default class AuthPage extends Vue {
                 password: this.userPassword,
             };
 
-            if (this.isLoginAction) {
-                const response = await this.login(requestData);
-                const { tokenData, userHash } = response.data;
+            const response = await this.login(requestData);
+            const { tokenData } = response.data;
 
-                if (userHash) {
-                    this.$router.replace({
-                        name: 'email_confirmation',
-                        query: { userHash },
-                    });
-                } else {
-                    this.setToken(tokenData);
+            if (tokenData) {
+                this.setToken(tokenData);
+                await this.loadUser();
+
+                if (this.user.isAdmin) {
                     this.$router.replace({ name: 'home' });
+                } else {
+                    eventBus.$emit('notify-error', this.translateText('accessForbidden'));
                 }
             } else {
-                const response = await this.register(requestData);
-                const { userHash } = response.data;
-
-                this.$router.replace({
-                    name: 'email_confirmation',
-                    query: { userHash },
-                });
+                eventBus.$emit('notify-error', this.translateText('accessForbidden'));
             }
         } catch (error) {
             eventBus.$emit('notify-error', error.response.data.error);
@@ -145,13 +129,19 @@ export default class AuthPage extends Vue {
             document.querySelector('.js-login-with-google'),
             {},
             async (googleUser: any) => {
-                try {
-                    const idToken = googleUser.getAuthResponse().id_token;
+                const idToken = googleUser.getAuthResponse().id_token;
 
+                try {
                     await this.loginWithGoogle(idToken);
-                    this.$router.replace({ name: 'home' });
+                    await this.loadUser();
+
+                    if (this.user.isAdmin) {
+                        this.$router.replace({ name: 'home' });
+                    } else {
+                        eventBus.$emit('notify-error', this.translateText('accessForbidden'));
+                    }
                 } catch (error) {
-                    eventBus.$emit('notify-error', error.message);
+                    eventBus.$emit('notify-error', error.response.data.error);
                 }
             },
             (error: any) => {
@@ -166,12 +156,22 @@ export default class AuthPage extends Vue {
         instance.login(async (response: any) => {
             const { accessToken, userID: userId } = response.authResponse;
 
-            await this.loginWithFacebook({
-                accessToken,
-                userId,
-            });
+            try {
+                await this.loginWithFacebook({
+                    accessToken,
+                    userId,
+                });
 
-            this.$router.replace({ name: 'home' });
+                await this.loadUser();
+
+                if (this.user.isAdmin) {
+                    this.$router.replace({ name: 'home' });
+                } else {
+                    eventBus.$emit('notify-error', this.translateText('accessForbidden'));
+                }
+            } catch (error) {
+                eventBus.$emit('notify-error', error.response.data.error);
+            }
         });
     }
 }

@@ -4,12 +4,6 @@
             {{ translateText('controlPanel') }}
         </template>
 
-        <template slot="topMenu">
-            <button class="btn btn-success btn-sm" @click="$router.push('/')">
-                {{ translateText('backToSite') }}
-            </button>
-        </template>
-
         <div class="control-panel">
             <div class="control-panel__filters">
                 <select v-model="showConfirmed" class="period-picker__start-day-picker">
@@ -135,7 +129,7 @@ import axios from '../axios';
         if (user.isAdmin) {
             next();
         } else {
-            next('/');
+            next('/login');
         }
     },
 })
@@ -167,6 +161,7 @@ export default class ControlPanel extends Vue {
     }
 
     async removePlace(place: any) {
+        // eslint-disable-next-line no-alert
         if (window.confirm(`Delete place ${place.name}?`)) {
             try {
                 await axios.post('/places/delete', {
