@@ -91,6 +91,8 @@ export default class AuthPage extends Vue {
 
     @userModule.State('user') user!: UserPublicData;
 
+    @userModule.Mutation('SET_USER_DATA') setUserData!: Function;
+
     mounted() {
         this.initGoogleAuth();
     }
@@ -106,12 +108,13 @@ export default class AuthPage extends Vue {
             const { tokenData } = response.data;
 
             if (tokenData) {
-                this.setToken(tokenData);
-                await this.loadUser();
+                await this.loadUser(tokenData.token);
 
                 if (this.user.isAdmin) {
+                    this.setToken(tokenData);
                     this.$router.replace({ name: 'home' });
                 } else {
+                    this.setUserData(null);
                     eventBus.$emit('notify-error', this.translateText('accessForbidden'));
                 }
             } else {

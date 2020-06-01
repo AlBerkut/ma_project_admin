@@ -23,8 +23,8 @@ export default {
     },
 
     actions: {
-        async loadUser(context: any) {
-            const token = auth.state.tokenData?.token;
+        async loadUser(context: any, payload: string) {
+            const token = payload || auth.state.tokenData?.token;
             const { user } = context.state;
 
             if (user) {
